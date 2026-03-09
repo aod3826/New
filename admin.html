@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>Beauty Noodle Admin - LINE Messaging API</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- PWA manifest (optional) -->
+    <!-- แก้ไขจุดที่ 2: ใช้ template variable -->
+    <link rel="manifest" href="<?= SCRIPT_URL ?>?action=manifest">
+    
+    <style>
+        * { font-family: 'Sarabun', sans-serif; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #d97706; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #b45309; }
+        .stat-card { transition: all 0.2s ease; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #d97706; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .table-row-hover:hover { background-color: #fffbeb; }
+        .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: loading 1.5s infinite; }
+        @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .line-warning { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; margin-bottom: 1rem; border-radius: 0.5rem; }
+        .modal-backdrop { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <!-- MAIN APP (ซ่อนจนกว่า Login) -->
+    <div id="app" class="hidden min-h-screen flex flex-col">
+        
+        <!-- NAVBAR -->
+        <nav class="bg-gradient-to-r from-amber-700 to-amber-600 text-white shadow-lg sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-store-alt text-2xl"></i>
+                        <span class="font-bold text-xl tracking-tight" id="shopNameDisplay">Beauty Noodle</span>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm bg-white/20 px-3 py-1 rounded-full hidden md:block">
+                            <i class="far fa-clock mr-1"></i>
+                            <span id="currentTime"></span>
+                        </span>
+                        <span class="text-sm bg-white/20 px-3 py-1 rounded-full hidden md:block" id="connectionStatus">
+                            <i class="fas fa-wifi mr-1"></i>
+                            <span>กำลังเชื่อมต่อ...</span>
+                        </span>
+                        <button onclick="handleLogout()" class="bg-red-500/20 hover:bg-red-500/40 px-3 py-2 rounded-lg text-sm transition flex items-center">
+                            <i class="fas fa-sign-out-alt mr-2"></i>
+                            <span class="hidden sm:inline">ออกจากระบบ</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- TABS -->
+        <div class="border-b border-gray-200 bg-white shadow-sm sticky top-16 z-20">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex space-x-6 overflow-x-auto scrollbar-hide" id="tabContainer">
+                    <button onclick="switchTab('dashboard')" class="tab-btn active py-4 px-1 border-b-2 border-amber-600 text-amber-700 font-medium whitespace-nowrap" data-tab="dashboard">
+                        <i class="fas fa-chart-pie mr-2"></i>ภาพรวม
+                    </button>
+                    <button onclick="switchTab('orders')" class="tab-btn py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap" data-tab="orders">
+                        <i class="fas fa-shopping-cart mr-2"></i>จัดการออเดอร์
+                    </button>
+                    <button onclick="switchTab('menu')" class="tab-btn py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap" data-tab="menu">
+                        <i class="fas fa-utensils mr-2"></i>จัดการเมนู
+                    </button>
+                    <button onclick="switchTab('settings')" class="tab-btn py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap" data-tab="settings">
+                        <i class="fas fa-cog mr-2"></i>ตั้งค่า
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN CONTENT (คงเดิมทั้งหมด) -->
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            
+            <!-- TAB: DASHBOARD -->
+            <div id="tab-dashboard" class="tab-pane active space-y-6">
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    <div class="stat-card bg-white rounded-xl shadow-md p-5 border-l-4 border-amber-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-gray-500 text-sm">ยอดขายวันนี้</p>
+                                <p class="text-2xl font-bold text-gray-800" id="todayRevenue">0</p>
+                            </div>
+                            <div class="bg-amber-100 p-3 rounded-lg">
+                                <i class="fas fa-coins text-amber-600 text-xl"></i>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-2" id="todayOrders">0 ออเดอร์</p>
+                    </div>
+                    
+                    <div class="stat-card bg-white rounded-xl shadow-md p-5 border-l-4 border-yellow-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-gray-500 text-sm">รอดำเนินการ</p>
+                                <p class="text-2xl font-bold text-gray-800" id="pendingOrders">0</p>
+                            </div>
+                            <div class="bg-yellow-100 p-3 rounded-lg">
+                                <i class="fas fa-clock text-yellow-600 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card bg-white rounded-xl shadow-md p-5 border-l-4 border-purple-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-gray-500 text-sm">กำลังทำ</p>
+                                <p class="text-2xl font-bold text-gray-800" id="preparingOrders">0</p>
+                            </div>
+                            <div class="bg-purple-100 p-3 rounded-lg">
+                                <i class="fas fa-fire text-purple-600 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card bg-white rounded-xl shadow-md p-5 border-l-4 border-red-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-gray-500 text-sm">สินค้าใกล้หมด</p>
+                                <p class="text-2xl font-bold text-gray-800" id="lowStockCount">0</p>
+                            </div>
+                            <div class="bg-red-100 p-3 rounded-lg">
+                                <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-xl shadow-md p-5">
+                        <h3 class="font-semibold text-gray-700 mb-3 flex items-center">
+                            <i class="fas fa-chart-pie text-amber-600 mr-2"></i>ยอดขายตามหมวดหมู่
+                        </h3>
+                        <div class="h-64 relative">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-md p-5">
+                        <h3 class="font-semibold text-gray-700 mb-3 flex items-center">
+                            <i class="fas fa-tasks text-amber-600 mr-2"></i>สัดส่วนสถานะออเดอร์
+                        </h3>
+                        <div class="h-64 relative">
+                            <canvas id="statusChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recent Orders -->
+                <div class="bg-white rounded-xl shadow-md p-5">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-gray-700 flex items-center">
+                            <i class="fas fa-history text-amber-600 mr-2"></i>ออเดอร์ล่าสุด
+                        </h3>
+                        <button onclick="switchTab('orders')" class="text-sm text-amber-600 hover:text-amber-800">
+                            ดูทั้งหมด <i class="fas fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">เลขที่</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">เวลา</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">รายการ</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ยอดรวม</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">สถานะ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentOrdersTable">
+                                <tr><td colspan="5" class="text-center py-4 text-gray-400">กำลังโหลด...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: ORDERS -->
+            <div id="tab-orders" class="tab-pane space-y-6">
+                <div class="bg-white rounded-xl shadow-md p-5">
+                    <div class="flex flex-wrap justify-between items-center gap-4 mb-5">
+                        <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                            <i class="fas fa-shopping-cart text-amber-600 mr-3"></i>รายการออเดอร์ทั้งหมด
+                        </h2>
+                        <div class="flex gap-2">
+                            <select id="orderStatusFilter" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" onchange="loadOrders()">
+                                <option value="all">ทั้งหมด</option>
+                                <option value="Pending">⏳ รอดำเนินการ</option>
+                                <option value="Preparing">👨‍🍳 กำลังทำ</option>
+                                <option value="Completed">✅ เสร็จสิ้น</option>
+                                <option value="Cancelled">❌ ยกเลิก</option>
+                            </select>
+                            <button onclick="loadOrders()" class="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-amber-700">
+                                <i class="fas fa-sync-alt mr-1"></i>โหลดใหม่
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ออเดอร์</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">วันที่</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">รายการอาหาร</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ยอดรวม</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">สถานะ</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ordersTableBody">
+                                <tr><td colspan="6" class="text-center py-8 text-gray-400">กำลังโหลด...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: MENU -->
+            <div id="tab-menu" class="tab-pane space-y-6">
+                <div class="bg-white rounded-xl shadow-md p-5">
+                    <div class="flex justify-between items-center mb-5">
+                        <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                            <i class="fas fa-utensils text-amber-600 mr-3"></i>รายการเมนูอาหาร
+                        </h2>
+                        <button onclick="refreshMenu()" class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-200">
+                            <i class="fas fa-sync-alt mr-1"></i>รีเฟรช
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="menuGrid">
+                        <div class="col-span-full text-center py-8 text-gray-400">กำลังโหลดเมนู...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: SETTINGS (เพิ่มฟิลด์ liffId) -->
+            <div id="tab-settings" class="tab-pane space-y-6">
+                <div class="bg-white rounded-xl shadow-md p-5 max-w-2xl">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-5 flex items-center">
+                        <i class="fas fa-cog text-amber-600 mr-3"></i>ตั้งค่าร้านค้า
+                    </h2>
+                    
+                    <div class="space-y-5">
+                        <!-- ร้านค้า -->
+                        <div class="border-b border-gray-200 pb-5">
+                            <h3 class="font-medium text-gray-700 mb-3">ข้อมูลร้านค้า</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อร้าน</label>
+                                    <input type="text" id="shopNameInput" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์</label>
+                                    <input type="text" id="shopPhoneInput" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="08X-XXX-XXXX">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- LINE Messaging API -->
+                        <div class="border-b border-gray-200 pb-5">
+                            <h3 class="font-medium text-gray-700 mb-3 flex items-center">
+                                <i class="fab fa-line text-green-600 mr-2"></i>
+                                LINE Messaging API
+                            </h3>
+                            
+                            <div class="line-warning bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                                <div class="flex">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-exclamation-triangle text-yellow-400"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="text-sm text-yellow-700">
+                                            <strong>LINE Notify ถูกปิดให้บริการแล้ว</strong> (ตั้งแต่ 1 เม.ย. 2025)
+                                            <br>กรุณาใช้ LINE Messaging API ด้านล่างนี้แทน
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-blue-50 rounded-lg p-4 mb-4 text-sm text-blue-800">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                <strong>วิธีรับค่า LINE Messaging API:</strong>
+                                <ol class="list-decimal ml-6 mt-2 space-y-1">
+                                    <li>ไปที่ <a href="https://developers.line.biz" target="_blank" class="underline">LINE Developers Console</a></li>
+                                    <li>สร้าง Provider และ Channel (Messaging API)</li>
+                                    <li>ไปที่ Basic settings > คัดลอก Channel Secret</li>
+                                    <li>ไปที่ Messaging API > คัดลอก Channel Access Token (Long-lived)</li>
+                                    <li>เพิ่ม LINE Official Account เป็นเพื่อน แล้วรับ Group ID จาก Webhook</li>
+                                    <li>สร้าง LIFF app และคัดลอก LIFF ID</li>
+                                </ol>
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        LINE Channel Access Token <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="text" id="lineTokenInput" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="ใส่ Channel Access Token">
+                                    <p class="text-xs text-gray-400 mt-1" id="lineTokenPreview"></p>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        LINE Channel Secret <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="password" id="lineSecretInput" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Channel Secret">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        LINE Group/User ID <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="text" id="lineGroupIdInput" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="เช่น C1234567890...">
+                                    <p class="text-xs text-gray-400 mt-1">ใส่ Group ID เพื่อรับแจ้งเตือนออเดอร์ใหม่</p>
+                                </div>
+                                
+                                <!-- LIFF ID -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        LINE LIFF ID <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="text" id="liffIdInput" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="เช่น 2009141036-hUS55iKD">
+                                    <p class="text-xs text-gray-400 mt-1">ใส่ LIFF ID สำหรับให้ลูกค้า Login</p>
+                                </div>
+                                
+                                <div class="flex items-center gap-2 text-sm p-3 bg-gray-50 rounded-lg" id="lineStatus">
+                                    <i class="fas fa-circle text-gray-300"></i>
+                                    <span>ยังไม่ได้ตั้งค่า LINE Messaging API</span>
+                                </div>
+                                
+                                <div class="flex gap-2">
+                                    <button onclick="testLineConnection()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 flex items-center">
+                                        <i class="fab fa-line mr-2"></i>ทดสอบการเชื่อมต่อ
+                                    </button>
+                                    <button onclick="clearLineSettings()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 flex items-center">
+                                        <i class="fas fa-undo mr-2"></i>ล้างค่า
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- เปลี่ยนรหัสผ่าน -->
+                        <div id="passwordChangeSection" class="border-b border-gray-200 pb-5 hidden">
+                            <h3 class="font-medium text-red-600 mb-3 flex items-center">
+                                <i class="fas fa-key mr-2"></i>
+                                จำเป็นต้องเปลี่ยนรหัสผ่าน
+                            </h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่านเก่า</label>
+                                    <input type="password" id="oldPasswordInput" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่านใหม่</label>
+                                    <input type="password" id="newPasswordInput" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">ยืนยันรหัสผ่านใหม่</label>
+                                    <input type="password" id="confirmPasswordInput" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                </div>
+                                <button onclick="changeAdminPassword()" class="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700">
+                                    เปลี่ยนรหัสผ่าน
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- System Info -->
+                        <div>
+                            <h3 class="font-medium text-gray-700 mb-3">ข้อมูลระบบ</h3>
+                            <div class="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">เวอร์ชัน:</span>
+                                    <span class="font-mono" id="systemVersion">9.2.0</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">LINE Messaging API:</span>
+                                    <span id="lineApiStatus" class="text-gray-500">กำลังตรวจสอบ...</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">LIFF ID:</span>
+                                    <span id="liffIdStatus" class="text-gray-500">-</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">สถานะ Cache:</span>
+                                    <span class="text-green-600" id="cacheStatus">ใช้งานได้</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">จำนวน Logs:</span>
+                                    <span id="logCount">-</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="flex flex-wrap gap-3 pt-3">
+                            <button onclick="saveSettings()" class="bg-amber-600 text-white px-6 py-2 rounded-lg hover:bg-amber-700 flex items-center">
+                                <i class="fas fa-save mr-2"></i>บันทึกการตั้งค่า
+                            </button>
+                            <button onclick="clearCache()" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 flex items-center">
+                                <i class="fas fa-broom mr-2"></i>ล้าง Cache
+                            </button>
+                            <button onclick="checkSystemHealth()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center">
+                                <i class="fas fa-heartbeat mr-2"></i>ตรวจสอบระบบ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- LOGIN SCREEN -->
+    <div id="loginScreen" class="min-h-screen bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center p-5">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+            <div class="text-center mb-8">
+                <div class="w-20 h-20 bg-amber-100 rounded-full mx-auto flex items-center justify-center mb-4">
+                    <i class="fas fa-store-alt text-4xl text-amber-600"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800">Beauty Noodle Admin</h2>
+                <p class="text-gray-500 text-sm mt-1">เข้าสู่ระบบเพื่อจัดการร้าน</p>
+            </div>
+            
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อผู้ใช้</label>
+                    <input type="text" id="loginUsername" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="admin">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
+                    <input type="password" id="loginPassword" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="••••••">
+                </div>
+                <button onclick="handleLogin()" class="w-full bg-amber-600 text-white py-3 rounded-lg font-medium hover:bg-amber-700 transition flex items-center justify-center">
+                    <i class="fas fa-sign-in-alt mr-2"></i>เข้าสู่ระบบ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-5 right-5 bg-green-600 text-white px-5 py-3 rounded-lg shadow-lg z-50 hidden transition-all duration-300"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="hidden fixed inset-0 bg-black/50 z-[100] flex items-center justify-center">
+        <div class="bg-white rounded-xl p-6 flex flex-col items-center">
+            <div class="spinner mb-3"></div>
+            <p class="text-gray-700">กำลังดำเนินการ...</p>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ==========================================
+            // CONFIGURATION — แก้ไขจุดที่ 2: รับค่าจาก Apps Script template แทน hardcode
+            // ==========================================
+            const SCRIPT_URL = '<?= SCRIPT_URL ?>';
+            const APP_VERSION = '9.2.0';
+            
+            // ==========================================
+            // STATE MANAGEMENT
+            // ==========================================
+            let adminToken = localStorage.getItem('adminToken') || null;
+            let charts = { categoryChart: null, statusChart: null };
+            let connectionRetries = 0;
+            
+            // ==========================================
+            // UTILITY FUNCTIONS
+            // ==========================================
+            
+            function showToast(message, type = 'success') {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.className = `fixed top-5 right-5 px-5 py-3 rounded-lg shadow-lg z-50 transition-all duration-300 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white`;
+                toast.classList.remove('hidden');
+                setTimeout(() => toast.classList.add('hidden'), 3000);
+            }
+            
+            function showLoading(show = true) {
+                document.getElementById('loadingOverlay').classList.toggle('hidden', !show);
+            }
+            
+            function updateCurrentTime() {
+                const now = new Date();
+                document.getElementById('currentTime').textContent = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+            }
+            setInterval(updateCurrentTime, 1000);
+            
+            async function callPostAction(action, payload = {}) {
+                const fullPayload = { action, token: adminToken, ...payload };
+                // แก้ไข: เพิ่ม timeout 15 วินาที
+                const controller = new AbortController();
+                const fetchTimeout = setTimeout(() => controller.abort(), 15000);
+                try {
+                    const response = await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        mode: 'cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(fullPayload),
+                        signal: controller.signal
+                    });
+                    clearTimeout(fetchTimeout);
+                    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                    const data = await response.json();
+                    if (data.success === false && data.error === 'Unauthorized') {
+                        forceLogout();
+                        return data;
+                    }
+                    connectionRetries = 0;
+                    updateConnectionStatus('online', 'เชื่อมต่อแล้ว');
+                    return data;
+                } catch (error) {
+                    clearTimeout(fetchTimeout);
+                    console.error('POST error:', error.message);
+                    connectionRetries++;
+                    updateConnectionStatus('offline', `เชื่อมต่อล้มเหลว (${connectionRetries})`);
+                    if (error.name !== 'AbortError') showToast('การเชื่อมต่อขัดข้อง', 'error');
+                    return { success: false, error: error.message };
+                }
+            }
+            
+            async function callGetAction(action, params = {}) {
+                const url = new URL(SCRIPT_URL);
+                url.searchParams.append('action', action);
+                // แก้ไข: token ส่งผ่าน params โดยตรงเพื่อไม่ให้ append ซ้ำสองรอบ
+                if (!params.token && adminToken) params = { ...params, token: adminToken };
+                Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+
+                // แก้ไข: เพิ่ม timeout 15 วินาที ป้องกัน hang ไม่จบ
+                const controller = new AbortController();
+                const fetchTimeout = setTimeout(() => controller.abort(), 15000);
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'GET', mode: 'cors',
+                        signal: controller.signal
+                    });
+                    clearTimeout(fetchTimeout);
+                    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                    const data = await response.json();
+                    if (data.success === false && data.error === 'Unauthorized') {
+                        forceLogout();
+                        return data;
+                    }
+                    connectionRetries = 0;
+                    updateConnectionStatus('online', 'เชื่อมต่อแล้ว');
+                    return data;
+                } catch (error) {
+                    clearTimeout(fetchTimeout);
+                    console.error('GET error:', error.message);
+                    connectionRetries++;
+                    updateConnectionStatus('offline', `เชื่อมต่อล้มเหลว (${connectionRetries})`);
+                    if (error.name !== 'AbortError') {
+                        showToast('ไม่สามารถโหลดข้อมูลได้: ' + (error.message || ''), 'error');
+                    }
+                    return { success: false, error: error.message };
+                }
+            }
+            
+            // แก้ไขจุดที่ 4: ฟังก์ชัน force logout เมื่อ token หมดอายุ
+            function forceLogout() {
+                localStorage.removeItem('adminToken');
+                adminToken = null;
+                document.getElementById('app').classList.add('hidden');
+                document.getElementById('loginScreen').classList.remove('hidden');
+                showToast('Session หมดอายุ กรุณา Login ใหม่', 'error');
+            }
+            
+            function updateConnectionStatus(status, message) {
+                const statusEl = document.getElementById('connectionStatus');
+                if (status === 'online') {
+                    statusEl.innerHTML = `<i class="fas fa-wifi mr-1"></i><span>${message}</span>`;
+                } else {
+                    statusEl.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i><span>${message}</span>`;
+                }
+            }
+            
+            async function checkConnection() {
+                try {
+                    const result = await callGetAction('getShopStatus');
+                    if (result.success) {
+                        updateConnectionStatus('online', 'เชื่อมต่อแล้ว');
+                    } else {
+                        updateConnectionStatus('offline', 'เชื่อมต่อล้มเหลว');
+                    }
+                } catch (e) {
+                    updateConnectionStatus('offline', 'เชื่อมต่อล้มเหลว');
+                }
+            }
+            
+            function safeJsonParse(str, defaultValue = []) {
+                try {
+                    if (Array.isArray(str)) return str; // แก้ไขจุดที่ 7: ถ้าเป็น Array อยู่แล้ว return ได้เลย
+                    if (typeof str === 'string') {
+                        return JSON.parse(str) || defaultValue;
+                    }
+                    return str || defaultValue;
+                } catch (e) {
+                    console.warn('JSON parse error:', e);
+                    return defaultValue;
+                }
+            }
+            
+            function formatOrderItems(itemsJson) {
+                const items = safeJsonParse(itemsJson, []);
+                if (items.length === 0) return '-';
+                
+                return items.map(item => {
+                    const options = item.options && item.options.length > 0 
+                        ? ` (${item.options.join(', ')})` 
+                        : '';
+                    return `${item.quantity}x ${item.menuName}${options}`;
+                }).join('<br>');
+            }
+            
+            function formatOrderItemsShort(itemsJson, maxLength = 40) {
+                const items = safeJsonParse(itemsJson, []);
+                if (items.length === 0) return '-';
+                
+                const text = items.map(item => `${item.quantity}x ${item.menuName}`).join(', ');
+                return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+            }
+            
+            // ==========================================
+            // AUTHENTICATION
+            // ==========================================
+            
+            window.handleLogin = async function() {
+                const username = document.getElementById('loginUsername').value;
+                const password = document.getElementById('loginPassword').value;
+                if (!username || !password) {
+                    showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', 'error');
+                    return;
+                }
+                
+                showLoading(true);
+                const result = await callPostAction('adminLogin', { username, password });
+                showLoading(false);
+                
+                if (result.success) {
+                    adminToken = result.data.token;
+                    localStorage.setItem('adminToken', adminToken);
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('app').classList.remove('hidden');
+                    
+                    if (result.data.forceChange) {
+                        document.getElementById('passwordChangeSection').classList.remove('hidden');
+                        showToast('กรุณาเปลี่ยนรหัสผ่านก่อนใช้งาน', 'warning');
+                    }
+                    
+                    checkConnection();
+                    loadDashboardStats();
+                    loadOrders();
+                    loadMenu();
+                    loadSettings();
+                } else {
+                    showToast('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error');
+                }
+            };
+            
+            window.handleLogout = function() {
+                if (confirm('คุณต้องการออกจากระบบหรือไม่?')) {
+                    // แก้ไขจุดที่ 5: Refresh token บน server ด้วยเพื่อ invalidate token เก่า
+                    if (adminToken) {
+                        callPostAction('refreshAdminToken', { token: adminToken }).catch(() => {});
+                    }
+                    localStorage.removeItem('adminToken');
+                    adminToken = null;
+                    document.getElementById('app').classList.add('hidden');
+                    document.getElementById('loginScreen').classList.remove('hidden');
+                    document.getElementById('loginUsername').value = '';
+                    document.getElementById('loginPassword').value = '';
+                }
+            };
+            
+            window.changeAdminPassword = async function() {
+                const oldPass = document.getElementById('oldPasswordInput').value;
+                const newPass = document.getElementById('newPasswordInput').value;
+                const confirmPass = document.getElementById('confirmPasswordInput').value;
+                
+                if (!oldPass || !newPass || !confirmPass) {
+                    showToast('กรุณากรอกข้อมูลให้ครบ', 'error');
+                    return;
+                }
+                if (newPass !== confirmPass) {
+                    showToast('รหัสผ่านใหม่ไม่ตรงกัน', 'error');
+                    return;
+                }
+                if (newPass.length < 8) {
+                    showToast('รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร', 'error');
+                    return;
+                }
+                
+                showLoading(true);
+                const result = await callPostAction('changeAdminPassword', { oldPassword: oldPass, newPassword: newPass });
+                showLoading(false);
+                
+                if (result.success) {
+                    showToast('เปลี่ยนรหัสผ่านสำเร็จ');
+                    document.getElementById('passwordChangeSection').classList.add('hidden');
+                    document.getElementById('oldPasswordInput').value = '';
+                    document.getElementById('newPasswordInput').value = '';
+                    document.getElementById('confirmPasswordInput').value = '';
+                } else {
+                    showToast(result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            };
+            
+            // แก้ไข จุดที่ 6: checkTokenOnLoad ต้อง verify กับ server ไม่ใช่แค่ตรวจ localStorage
+            (async function checkTokenOnLoad() {
+                if (!adminToken) return; // ไม่มี token → แสดงหน้า login (default)
+                try {
+                    // callGetAction จะ inject token อัตโนมัติ ไม่ต้องส่งซ้ำ
+                    const data = await callGetAction('getDashboardStatsData');
+                    if (data && data.success) {
+                        document.getElementById('loginScreen').classList.add('hidden');
+                        document.getElementById('app').classList.remove('hidden');
+                        checkConnection();
+                        loadDashboardStats(data);
+                        loadOrders();
+                        loadMenu();
+                        loadSettings();
+                    } else {
+                        // Token หมดอายุหรือไม่ valid → clear แล้วแสดง login
+                        forceLogout();
+                    }
+                } catch (e) {
+                    // network error → แสดง login ดีกว่า
+                    forceLogout();
+                }
+            })();
+            
+            // ==========================================
+            // TAB MANAGEMENT
+            // ==========================================
+            
+            window.switchTab = function(tabName) {
+                document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+                document.getElementById(`tab-${tabName}`).classList.add('active');
+                
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.classList.remove('active', 'border-amber-600', 'text-amber-700');
+                    btn.classList.add('border-transparent', 'text-gray-500');
+                });
+                const activeBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+                if (activeBtn) {
+                    activeBtn.classList.add('active', 'border-amber-600', 'text-amber-700');
+                    activeBtn.classList.remove('border-transparent', 'text-gray-500');
+                }
+                
+                if (tabName === 'dashboard') loadDashboardStats();
+                else if (tabName === 'orders') loadOrders();
+                else if (tabName === 'menu') loadMenu();
+                else if (tabName === 'settings') loadSettings();
+            };
+            
+            // ==========================================
+            // DASHBOARD FUNCTIONS
+            // ==========================================
+            
+            async function loadDashboardStats(prefetchedResult = null) {
+                showLoading(true);
+                const result = prefetchedResult || await callGetAction('getDashboardStatsData');
+                if (result.success) {
+                    const stats = result.data;
+                    document.getElementById('todayRevenue').textContent = new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 0 }).format(stats.todayRevenue || 0);
+                    document.getElementById('todayOrders').textContent = (stats.todayOrders || 0) + ' ออเดอร์';
+                    document.getElementById('pendingOrders').textContent = stats.pendingOrders || 0;
+                    document.getElementById('preparingOrders').textContent = (stats.preparingOrders || 0);
+                    document.getElementById('lowStockCount').textContent = stats.lowStockCount || 0;
+                    
+                    loadCategoryChart();
+                    loadStatusChart(stats);
+                    loadRecentOrders();
+                }
+                showLoading(false);
+            }
+            
+            async function loadCategoryChart() {
+                const result = await callGetAction('getBestSellingItemsData');
+                if (!result.success) return;
+                
+                const menuResult = await callGetAction('getMenuData');
+                if (!menuResult.success) return;
+                
+                const menuMap = new Map(menuResult.data.menu.map(m => [m.id, m.category]));
+                const categorySales = {};
+                
+                result.data.all.forEach(item => {
+                    const category = menuMap.get(item.id) || 'อื่นๆ';
+                    categorySales[category] = (categorySales[category] || 0) + item.revenue;
+                });
+                
+                const ctx = document.getElementById('categoryChart').getContext('2d');
+                if (charts.categoryChart) charts.categoryChart.destroy();
+                
+                charts.categoryChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: Object.keys(categorySales),
+                        datasets: [{
+                            data: Object.values(categorySales),
+                            backgroundColor: ['#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444']
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom' } } }
+                });
+            }
+            
+            function loadStatusChart(stats) {
+                const ctx = document.getElementById('statusChart').getContext('2d');
+                if (charts.statusChart) charts.statusChart.destroy();
+                
+                charts.statusChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['รอดำเนินการ', 'กำลังทำ', 'เสร็จสิ้น', 'ยกเลิก'],
+                        datasets: [{
+                            data: [
+                                stats.pendingOrders || 0,
+                                stats.preparingOrders || 0,
+                                stats.completedOrders || 0,
+                                stats.cancelledOrders || 0
+                            ],
+                            backgroundColor: ['#f59e0b', '#8b5cf6', '#10b981', '#ef4444']
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom' } } }
+                });
+            }
+            
+            async function loadRecentOrders() {
+                const result = await callGetAction('getAllOrdersData', { limit: 5 });
+                if (!result.success) return;
+                
+                const orders = result.data.orders || [];
+                const tbody = document.getElementById('recentOrdersTable');
+                if (orders.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-gray-400">ไม่มีออเดอร์</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = orders.map(order => {
+                    let statusClass = 'bg-gray-100 text-gray-800';
+                    if (order.status === 'Pending') statusClass = 'bg-yellow-100 text-yellow-800';
+                    else if (order.status === 'Preparing') statusClass = 'bg-purple-100 text-purple-800';
+                    else if (order.status === 'Completed') statusClass = 'bg-green-100 text-green-800';
+                    else if (order.status === 'Cancelled') statusClass = 'bg-red-100 text-red-800';
+                    
+                    const itemsText = formatOrderItemsShort(order.items);
+                    
+                    return `<tr class="table-row-hover">
+                        <td class="px-4 py-3 text-sm font-mono">${order.orderId}</td>
+                        <td class="px-4 py-3 text-sm">${new Date(order.timestamp).toLocaleString('th-TH', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</td>
+                        <td class="px-4 py-3 text-sm">${itemsText}</td>
+                        <td class="px-4 py-3 text-sm font-semibold text-amber-700">${order.totalPrice} ฿</td>
+                        <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full ${statusClass}">${order.status}</span></td>
+                    </tr>`;
+                }).join('');
+            }
+            
+            // ==========================================
+            // ORDERS FUNCTIONS
+            // ==========================================
+            
+            window.loadOrders = async function() {
+                showLoading(true);
+                const filter = document.getElementById('orderStatusFilter').value;
+                // แก้ไขจุดที่ 6: ถ้า filter เป็น 'all' ให้ส่ง status: 'all' ตรงๆ ไม่ใช่ string ว่าง
+                const result = await callGetAction('getAllOrdersData', { status: filter });
+                showLoading(false);
+                
+                if (!result.success) {
+                    document.getElementById('ordersTableBody').innerHTML = '<tr><td colspan="6" class="text-center py-8 text-red-500">โหลดข้อมูลไม่สำเร็จ</td></tr>';
+                    return;
+                }
+                
+                const orders = result.data.orders || [];
+                const tbody = document.getElementById('ordersTableBody');
+                if (orders.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-400">ไม่มีออเดอร์</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = orders.map(order => {
+                    let statusClass = 'bg-gray-100 text-gray-800';
+                    if (order.status === 'Pending') statusClass = 'bg-yellow-100 text-yellow-800';
+                    else if (order.status === 'Preparing') statusClass = 'bg-purple-100 text-purple-800';
+                    else if (order.status === 'Completed') statusClass = 'bg-green-100 text-green-800';
+                    else if (order.status === 'Cancelled') statusClass = 'bg-red-100 text-red-800';
+                    
+                    const itemsDisplay = formatOrderItems(order.items);
+                    
+                    return `<tr class="table-row-hover">
+                        <td class="px-4 py-3 text-sm font-mono">${order.orderId}<br><span class="text-xs text-gray-400">${order.userId || ''}</span></td>
+                        <td class="px-4 py-3 text-sm">${new Date(order.timestamp).toLocaleString('th-TH')}</td>
+                        <td class="px-4 py-3 text-sm">${itemsDisplay}</td>
+                        <td class="px-4 py-3 text-sm font-semibold text-amber-700">${order.totalPrice} ฿</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 text-xs rounded-full ${statusClass}">${order.status}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <select onchange="updateOrderStatus('${order.orderId}', this.value)" class="border border-gray-300 rounded px-2 py-1 text-xs">
+                                <option value="Pending" ${order.status === 'Pending' ? 'selected' : ''}>⏳ รอ</option>
+                                <option value="Preparing" ${order.status === 'Preparing' ? 'selected' : ''}>👨‍🍳 กำลังทำ</option>
+                                <option value="Completed" ${order.status === 'Completed' ? 'selected' : ''}>✅ เสร็จ</option>
+                                <option value="Cancelled" ${order.status === 'Cancelled' ? 'selected' : ''}>❌ ยกเลิก</option>
+                            </select>
+                        </td>
+                    </tr>`;
+                }).join('');
+            };
+            
+            window.updateOrderStatus = async function(orderId, newStatus) {
+                if (!confirm('ยืนยันการเปลี่ยนสถานะ?')) return;
+                showLoading(true);
+                const result = await callPostAction('adminUpdateOrderStatusData', { orderId, status: newStatus });
+                showLoading(false);
+                if (result.success) {
+                    showToast('อัปเดตสถานะสำเร็จ');
+                    loadOrders();
+                } else {
+                    showToast(result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            };
+            
+            // ==========================================
+            // MENU FUNCTIONS
+            // ==========================================
+            
+            window.loadMenu = async function() {
+                showLoading(true);
+                // แก้ไข: ใช้ adminGetAllMenusData แทน getMenuData เพื่อให้เห็นเมนูที่ปิดอยู่ด้วย
+                const result = await callGetAction('adminGetAllMenusData');
+                showLoading(false);
+                
+                if (!result.success) {
+                    document.getElementById('menuGrid').innerHTML = '<div class="col-span-full text-center py-8 text-red-500">โหลดเมนูไม่สำเร็จ</div>';
+                    return;
+                }
+                
+                // แก้ไข: adminGetAllMenusData คืน result.data.menu (เหมือนกัน แต่รวมเมนูที่ inactive ด้วย)
+                const menu = result.data.menu || [];
+                const grid = document.getElementById('menuGrid');
+                if (menu.length === 0) {
+                    grid.innerHTML = '<div class="col-span-full text-center py-8 text-gray-400">ไม่มีเมนู</div>';
+                    return;
+                }
+                
+                grid.innerHTML = menu.map(item => `
+                    <div class="border border-gray-200 rounded-xl p-4 bg-white shadow-sm hover:shadow transition">
+                        <div class="flex justify-between items-start">
+                            <h3 class="font-semibold text-gray-800">${item.name}</h3>
+                            <span class="text-sm bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">${item.category}</span>
+                        </div>
+                        <p class="text-amber-700 font-bold mt-2">${item.price} ฿</p>
+                        <p class="text-xs text-gray-400 mt-1 line-clamp-2">${item.description || ''}</p>
+                        <div class="mt-4 flex justify-between items-center">
+                            <span class="text-xs text-gray-500">${item.status === 'active' ? '🟢 เปิดขาย' : '🔴 ปิดขาย'}</span>
+                            <button onclick="toggleMenuStatus('${item.id}', '${item.status}')" class="text-sm ${item.status === 'active' ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'}">
+                                <i class="fas ${item.status === 'active' ? 'fa-toggle-on' : 'fa-toggle-off'} mr-1"></i>
+                                ${item.status === 'active' ? 'ปิด' : 'เปิด'}
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            };
+            
+            window.refreshMenu = function() {
+                loadMenu();
+                showToast('รีเฟรชเมนูเรียบร้อย');
+            };
+            
+            window.toggleMenuStatus = async function(menuId, currentStatus) {
+                const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+                if (!confirm(`ต้องการ${newStatus === 'active' ? 'เปิด' : 'ปิด'} เมนูนี้หรือไม่?`)) return;
+                
+                showLoading(true);
+                const result = await callPostAction('adminUpdateMenuData', {
+                    menuData: { id: menuId, status: newStatus }
+                });
+                showLoading(false);
+                
+                if (result.success) {
+                    showToast('อัปเดตสถานะเมนูสำเร็จ');
+                    loadMenu();
+                } else {
+                    showToast(result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            };
+            
+            // ==========================================
+            // SETTINGS FUNCTIONS
+            // ==========================================
+            
+            window.loadSettings = async function() {
+                showLoading(true);
+                
+                const shopResult = await callGetAction('getShopStatus');
+                if (shopResult.success) {
+                    document.getElementById('shopNameInput').value = shopResult.data.shopName || '';
+                    document.getElementById('shopPhoneInput').value = shopResult.data.phoneNumber || '';
+                    document.getElementById('shopNameDisplay').textContent = shopResult.data.shopName || 'Beauty Noodle';
+                }
+                
+                const lineResult = await callGetAction('getLineSettingsData');
+                if (lineResult.success) {
+                    const lineData = lineResult.data;
+                    document.getElementById('lineGroupIdInput').value = lineData.groupId || '';
+                    document.getElementById('liffIdInput').value = lineData.liffId || '';
+                    
+                    if (lineData.tokenPreview) {
+                        document.getElementById('lineTokenPreview').textContent = `Token: ${lineData.tokenPreview}`;
+                    }
+                    
+                    const lineStatus = document.getElementById('lineStatus');
+                    const lineApiStatus = document.getElementById('lineApiStatus');
+                    const liffIdStatus = document.getElementById('liffIdStatus');
+                    
+                    if (lineData.isConfigured) {
+                        lineStatus.innerHTML = '<i class="fas fa-circle text-green-500 mr-2"></i><span class="text-green-600">✅ เชื่อมต่อ LINE Messaging API พร้อมใช้งาน</span>';
+                        lineApiStatus.innerHTML = '<span class="text-green-600">เชื่อมต่อแล้ว</span>';
+                    } else {
+                        lineStatus.innerHTML = '<i class="fas fa-circle text-red-500 mr-2"></i><span class="text-red-600">⚠️ ยังไม่ได้ตั้งค่า LINE Messaging API</span>';
+                        lineApiStatus.innerHTML = '<span class="text-red-600">ยังไม่ได้ตั้งค่า</span>';
+                    }
+                    
+                    liffIdStatus.textContent = lineData.liffId ? lineData.liffId : 'ไม่ได้ตั้งค่า';
+                }
+                
+                document.getElementById('systemVersion').textContent = APP_VERSION;
+                
+                showLoading(false);
+            };
+            
+            window.saveSettings = async function() {
+                const shopName = document.getElementById('shopNameInput').value;
+                const shopPhone = document.getElementById('shopPhoneInput').value;
+                const lineToken = document.getElementById('lineTokenInput').value;
+                const lineSecret = document.getElementById('lineSecretInput').value;
+                const lineGroupId = document.getElementById('lineGroupIdInput').value;
+                const liffId = document.getElementById('liffIdInput').value;
+                
+                showLoading(true);
+                
+                if (shopName) {
+                    await callPostAction('adminUpdateShopNameData', { shopName });
+                }
+                
+                if (shopPhone) {
+                    await callPostAction('adminUpdateConfigData', { key: 'phoneNumber', value: shopPhone });
+                }
+                
+                if (lineToken || lineSecret || lineGroupId || liffId) {
+                    const result = await callPostAction('saveLineSettingsData', {
+                        lineToken: lineToken || undefined,
+                        lineSecret: lineSecret || undefined,
+                        lineGroupId: lineGroupId || undefined,
+                        liffId: liffId || undefined
+                    });
+                    
+                    if (result.success) {
+                        showToast('บันทึกการตั้งค่า LINE สำเร็จ');
+                    } else {
+                        showToast(result.error || 'เกิดข้อผิดพลาด', 'error');
+                    }
+                }
+                
+                showLoading(false);
+                showToast('บันทึกการตั้งค่าเรียบร้อย');
+                
+                loadSettings();
+            };
+            
+            window.testLineConnection = async function() {
+                showLoading(true);
+                const result = await callPostAction('testLineData');
+                showLoading(false);
+                
+                if (result.success) {
+                    showToast('✅ ทดสอบ LINE Messaging API สำเร็จ!', 'success');
+                } else {
+                    showToast('❌ เชื่อมต่อ LINE Messaging API ล้มเหลว', 'error');
+                }
+            };
+            
+            window.clearLineSettings = function() {
+                if (confirm('ต้องการล้างค่า LINE Settings หรือไม่?')) {
+                    document.getElementById('lineTokenInput').value = '';
+                    document.getElementById('lineSecretInput').value = '';
+                    document.getElementById('lineGroupIdInput').value = '';
+                    document.getElementById('liffIdInput').value = '';
+                    document.getElementById('lineTokenPreview').textContent = '';
+                    showToast('ล้างค่าเรียบร้อย');
+                }
+            };
+            
+            window.clearCache = async function() {
+                if (!confirm('ต้องการล้าง Cache ของระบบหรือไม่?')) return;
+                showLoading(true);
+                const result = await callPostAction('clearAllCache');
+                showLoading(false);
+                if (result.success) {
+                    showToast('ล้าง Cache เรียบร้อย');
+                } else {
+                    showToast('เกิดข้อผิดพลาด', 'error');
+                }
+            };
+            
+            window.checkSystemHealth = async function() {
+                showLoading(true);
+                const result = await callPostAction('systemHealthCheck');
+                showLoading(false);
+                
+                if (result.success) {
+                    const health = result.data;
+                    let message = `✅ ระบบปกติ (${health.status})`;
+                    if (health.checks.line && !health.checks.line.configured) {
+                        message += ' - LINE ยังไม่ตั้งค่า';
+                    }
+                    showToast(message, health.status === 'healthy' ? 'success' : 'warning');
+                } else {
+                    showToast('ตรวจสอบระบบล้มเหลว', 'error');
+                }
+            };
+            
+        })();
+    </script>
+</body>
+</html>
